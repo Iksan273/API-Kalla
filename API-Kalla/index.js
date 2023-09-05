@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const port = 3000;
+const port = process.env.POR||3000;
 const bodyParser = require('body-parser');
 const db = require('./connection');
 const response = require('./response');
