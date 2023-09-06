@@ -54,7 +54,7 @@ app.post('/register', (req, res) => {
     from: 'kallatracking01@gmail.com',
     to: email,
     subject: 'Verifikasi Email',
-    text: `Klik tautan ini untuk verifikasi email Anda: http://localhost:${port}/verify/${verificationToken}`,
+    text: `Klik tautan ini untuk verifikasi email Anda: https://api-kalla-ovn3.vercel.app//verify/${verificationToken}`,
   };
 
   // Simpan pengguna yang belum diverifikasi dalam array
