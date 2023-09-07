@@ -120,12 +120,12 @@ app.post('/login', (req, res) => {
         return res.status(500).json({ message: 'Internal Server Error' });
       }
       if (results.length === 0) {
-        return res.status(401).json({ message: 'Email atau kata sandi salah' });
+        return res.status(200).json({ message: 'Email atau kata sandi salah' });
       }
       const user = results[0];
 
       if (user.isVerified === 0) {
-        return res.status(401).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
+        return res.status(200).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
       }
 
       res.status(200).json({ message: 'Login berhasil', user });
