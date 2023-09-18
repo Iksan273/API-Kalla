@@ -42,18 +42,10 @@ app.get('/users', (req, res) => {
 
 app.post('/register', (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
-  const hashPass=""
 
   if (!firstName || !lastName || !email || !username || !password) {
     return res.status(400).json({ message: 'Semua data harus terisi' });
   }
-  bcrypt.hash(password, 10, (err, hashedPassword) => {
-    if (err) {
-      console.error('Error hashing password:', err);
-      return res.status(500).json({ message: 'Terjadi kesalahan saat mengenkripsi password' });
-    }
-    hashPass=hashedPassword
-  })
 
   const verificationToken = createVerificationToken({ email });
   console.log(verificationToken);
@@ -62,11 +54,11 @@ app.post('/register', (req, res) => {
     from: 'kallatracking01@gmail.com',
     to: email,
     subject: 'Verifikasi Email',
-    text: `Klik tautan ini untuk verifikasi email Anda: https://api-kalla-ovn3.vercel.app/verify/${verificationToken}`,
+    text: `Klik tautan ini untuk verifikasi email Anda: https://api-kalla-ovn3.vercel.app//verify/${verificationToken}`,
   };
 
   // Simpan pengguna yang belum diverifikasi dalam array
-  unverifiedUsers.push({ firstName, lastName, email, username, password:hashPass });
+  unverifiedUsers.push({ firstName, lastName, email, username, password });
 
   transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
@@ -76,7 +68,7 @@ app.post('/register', (req, res) => {
       console.log('Email verifikasi terkirim: ' + info.response);
       const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
 
-      db.query(sql, [firstName, lastName, email, username, hashPass], (error, result) => {
+      db.query(sql, [firstName, lastName, email, username, password], (error, result) => {
         if (error) {
           console.error('Error executing SQL query:', error);
           return res.status(500).json({ message: 'Internal Server Error' });
