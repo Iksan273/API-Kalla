@@ -30,6 +30,10 @@ const verifyToken = (req, res, next) => {
   });
 };
 
+app.get('/', (req, res)=>{
+  return 'halohaloooo'
+})
+
 app.get('/users', (req, res) => {
   const sql = "SELECT * FROM user";
   db.query(sql, (error, result) => {
