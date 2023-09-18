@@ -31,7 +31,7 @@ const verifyToken = (req, res, next) => {
 };
 
 app.get('/', (req, res)=>{
-  return 'halohaloooo'
+  res.send ("halohaloooo")
 })
 
 app.get('/users', (req, res) => {
