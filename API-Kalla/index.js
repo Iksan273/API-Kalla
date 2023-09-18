@@ -7,6 +7,7 @@ const response = require('./response');
 const createVerificationToken = require('./createVerificationToken');
 const transporter = require('./transporter');
 const jwt = require('jsonwebtoken');
+const bcrypt=require('bcrypt')
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -42,8 +43,6 @@ app.get('/users', (req, res) => {
 
 app.post('/register', (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
-  const hashPass=""
-
   if (!firstName || !lastName || !email || !username || !password) {
     return res.status(400).json({ message: 'Semua data harus terisi' });
   }
@@ -54,26 +53,24 @@ app.post('/register', (req, res) => {
     from: 'kallatracking01@gmail.com',
     to: email,
     subject: 'Verifikasi Email',
-    text: `Klik tautan ini untuk verifikasi email Anda: https://api-kalla-ovn3.vercel.app/verify/${verificationToken}`,
+    text: `Klik tautan ini untuk verifikasi email Anda: http://127.0.0.1:3000/verify/${verificationToken}`,
   };
 
   // Simpan pengguna yang belum diverifikasi dalam array
-  unverifiedUsers.push({ firstName, lastName, email, username, password:hashPass });
+  unverifiedUsers.push({ firstName, lastName, email, username, password });
 
-  transporter.sendMail(mailOptions, (error, info) => {
+  transporter.sendMail(mailOptions, async (error, info) => {
     if (error) {
       console.error(error);
       res.status(500).json({ message: 'Gagal mengirim email verifikasi' });
     } else {
       console.log('Email verifikasi terkirim: ' + info.response);
       const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
-<<<<<<< HEAD
+      const salt = await bcrypt.genSalt(10);
 
-      db.query(sql, [firstName, lastName, email, username, hashPass], (error, result) => {
-=======
-      const hashedPassword =  bcrypt.hash('password', 10);
+      // Enkripsi password
+      const hashedPassword = await bcrypt.hash(password, salt);
       db.query(sql, [firstName, lastName, email, username, hashedPassword], (error, result) => {
->>>>>>> parent of 4e2977b (update)
         if (error) {
           console.error('Error executing SQL query:', error);
           return res.status(500).json({ message: 'Internal Server Error' });
@@ -111,15 +108,14 @@ app.get('/verify/:token', verifyToken, (req, res) => {
     res.status(404).json({ message: 'Pengguna tidak ditemukan di dalam antrian verifikasi' });
   }
 });
-
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ message: 'Email dan password diperlukan' });
   } else {
-    const sql = "SELECT * FROM user WHERE email = ? AND password = ?";
-    db.query(sql, [email, password], (error, results) => {
+    const sql = "SELECT * FROM user WHERE email = ?";
+    db.query(sql, [email], async (error, results) => {
       if (error) {
         console.error('Error executing SQL query:', error);
         return res.status(500).json({ message: 'Internal Server Error' });
@@ -133,10 +129,37 @@ app.post('/login', (req, res) => {
         return res.status(401).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
       }
 
+      // Bandingkan password yang diberikan oleh pengguna dengan hashed password di database
+      const passwordMatch = await bcrypt.compare(password, user.password);
+
+      if (!passwordMatch) {
+        return res.status(401).json({ message: 'Email atau kata sandi salah' });
+      }
+
       res.status(200).json({ message: 'Login berhasil', user });
     });
   }
 });
+app.put('/profile/:userId', (req, res) => {
+  const userId = req.params.userId; // Mendapatkan userId dari URL
+  const { firstName, lastName, username, password } = req.body;
+
+  const updateQuery = "UPDATE user SET firstName = ?, lastName = ?, username = ?, password = ? WHERE id = ?";
+  db.query(updateQuery, [firstName, lastName, username, password, userId], (error, result) => {
+    if (error) {
+      console.error('Error executing SQL query:', error);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Pengguna tidak ditemukan' });
+    }
+
+    res.status(200).json({ message: 'Profil pengguna berhasil diperbarui' });
+  });
+});
+
+
 
 
 app.listen(port, () => {
