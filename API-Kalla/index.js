@@ -61,15 +61,15 @@ app.post('/register', (req, res) => {
   // Simpan pengguna yang belum diverifikasi dalam array
   unverifiedUsers.push({ firstName, lastName, email, username, password });
 
-  transporter.sendMail(mailOptions, async (error, info) => {
+  transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
       console.error(error);
       res.status(500).json({ message: 'Gagal mengirim email verifikasi' });
     } else {
       console.log('Email verifikasi terkirim: ' + info.response);
       const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
-      const hashedPassword = await bcrypt.hash('password', 10);
-      db.query(sql, [firstName, lastName, email, username, hashedPassword], (error, result) => {
+      
+      db.query(sql, [firstName, lastName, email, username, bcrypt.hash(password, 10)], (error, result) => {
         if (error) {
           console.error('Error executing SQL query:', error);
           return res.status(500).json({ message: 'Internal Server Error' });
