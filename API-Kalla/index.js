@@ -67,8 +67,13 @@ app.post('/register', (req, res) => {
     } else {
       console.log('Email verifikasi terkirim: ' + info.response);
       const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
+<<<<<<< HEAD
 
       db.query(sql, [firstName, lastName, email, username, hashPass], (error, result) => {
+=======
+      const hashedPassword =  bcrypt.hash('password', 10);
+      db.query(sql, [firstName, lastName, email, username, hashedPassword], (error, result) => {
+>>>>>>> parent of 4e2977b (update)
         if (error) {
           console.error('Error executing SQL query:', error);
           return res.status(500).json({ message: 'Internal Server Error' });
