@@ -7,7 +7,7 @@ const response = require('./response');
 const createVerificationToken = require('./createVerificationToken');
 const transporter = require('./transporter');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -47,22 +47,6 @@ app.post('/register', (req, res) => {
     return res.status(400).json({ message: 'Semua data harus terisi' });
   }
 
-  // Enkripsi password sebelum menyimpannya
-  bcrypt.hash(password, 10, (err, hashedPassword) => {
-    if (err) {
-      console.error('Error hashing password:', err);
-      return res.status(500).json({ message: 'Terjadi kesalahan saat mengenkripsi password' });
-    }
-    const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
-    db.query(sql, [firstName, lastName, email, username, hashedPassword], (error, result) => {
-      if (error) {
-        console.error('Error executing SQL query:', error);
-        return res.status(500).json({ message: 'Internal Server Error' });
-      }
-      res.status(201).json({ error: false, message: 'Pendaftaran berhasil. Silakan verifikasi email Anda.' });
-    });
-  });
-  // Simpan data pengguna yang belum diverifikasi dalam array (untuk contoh)
   const verificationToken = createVerificationToken({ email });
   console.log(verificationToken);
 
@@ -70,10 +54,11 @@ app.post('/register', (req, res) => {
     from: 'kallatracking01@gmail.com',
     to: email,
     subject: 'Verifikasi Email',
-    text: `Klik tautan ini untuk verifikasi email Anda: https://api-kalla-ovn3.vercel.app/verify/${verificationToken}`,
+    text: `Klik tautan ini untuk verifikasi email Anda: https://api-kalla-ovn3.vercel.app//verify/${verificationToken}`,
   };
-  unverifiedUsers.push({ firstName, lastName, email, username, password});
-  console.log(unverifiedUsers)
+
+  // Simpan pengguna yang belum diverifikasi dalam array
+  unverifiedUsers.push({ firstName, lastName, email, username, password });
 
   transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
@@ -81,17 +66,24 @@ app.post('/register', (req, res) => {
       res.status(500).json({ message: 'Gagal mengirim email verifikasi' });
     } else {
       console.log('Email verifikasi terkirim: ' + info.response);
-      res.status(201).json({ error: false, message: 'Pendaftaran berhasil. Silakan verifikasi email Anda.' });
+      const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
+
+      db.query(sql, [firstName, lastName, email, username, password], (error, result) => {
+        if (error) {
+          console.error('Error executing SQL query:', error);
+          return res.status(500).json({ message: 'Internal Server Error' });
+        }
+        res.status(201).json({ error: false, message: 'Pendaftaran berhasil. Silakan verifikasi email Anda.' });
+      });
     }
+    })
   });
-});
 
 
 // Rute untuk verifikasi email
 app.get('/verify/:token', verifyToken, (req, res) => {
   // Mendapatkan email dari informasi token
   const email = req.decoded.email;
-  console.log(email)
 
   // Cari pengguna yang belum diverifikasi berdasarkan email
   const unverifiedUserIndex = unverifiedUsers.findIndex((user) => user.email === email);
@@ -145,12 +137,3 @@ app.post('/login', (req, res) => {
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
-
-app.put('/update:id',(req,res)=>{
-
-  const userId=req.params.id
-  const { firstname, lastname, username, password } = req.body;
-
-
-
-})
