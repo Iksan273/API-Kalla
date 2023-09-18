@@ -1,22 +1,23 @@
-const mysql = require('mysql')
-const db = mysql.createConnection({
+const mysql = require('mysql');
 
+// Konfigurasi koneksi ke database
+const dbConfig = {
+  host: 'bnwraqawhrfuvvpy2tpx-mysql.services.clever-cloud.com',
+  user: 'uyozibhdvgm12nde', 
+  password: 'EFUIQF2Dj1x0yc99cYM9', 
+  database: 'bnwraqawhrfuvvpy2tpx' 
+};
 
-    host: process.env.DB_HOST, 
-    user: process.env.DB_USERNAME, 
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DBNAME,
-    port:process.env.DB_PORT,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-    
-   
+// Membuat koneksi ke database
+const connection = mysql.createConnection(dbConfig);
+
+// Membuka koneksi ke database
+connection.connect((err) => {
+  if (err) {
+    console.error('Koneksi ke database gagal:', err);
+  } else {
+    console.log('Terhubung ke database MySQL');
+  }
 });
 
-// db.getConnection((err,conn)=>{
-//     if(err)console.log(err)
-//     console.log("Connected Succesfully")
-// })
-
-module.exports=db
+module.exports = connection;
