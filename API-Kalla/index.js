@@ -47,14 +47,6 @@ app.post('/register', (req, res) => {
   if (!firstName || !lastName || !email || !username || !password) {
     return res.status(400).json({ message: 'Semua data harus terisi' });
   }
-  bcrypt.hash(password, 10, (err, hashedPassword) => {
-    if (err) {
-      console.error('Error hashing password:', err);
-      return res.status(500).json({ message: 'Terjadi kesalahan saat mengenkripsi password' });
-    }
-    hashPass=hashedPassword
-  })
-
   const verificationToken = createVerificationToken({ email });
   console.log(verificationToken);
 
