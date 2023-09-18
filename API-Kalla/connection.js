@@ -1,11 +1,6 @@
 const mysql = require('mysql')
 const db = mysql.createConnection({
 
-
-    // host:"bnwraqawhrfuvvpy2tpx-mysql.services.clever-cloud.com",
-    // user: "uyozibhdvgm12nde",
-    // password:"T5v27I3QczmffcKGXhk7",
-    // database:"bnwraqawhrfuvvpy2tpx"
     host: process.env.DB_HOST, 
     user: process.env.DB_USERNAME, 
     password: process.env.DB_PASSWORD,
@@ -13,11 +8,12 @@ const db = mysql.createConnection({
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
-    // host:"localhost",
-    // user: "root",
-    // password:"",
-    // database:"kalla_tracking"
+   
+});
 
-})
+// db.getConnection((err,conn)=>{
+//     if(err)console.log(err)
+//     console.log("Connected Succesfully")
+// })
 
 module.exports=db
