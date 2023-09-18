@@ -7,6 +7,7 @@ const response = require('./response');
 const createVerificationToken = require('./createVerificationToken');
 const transporter = require('./transporter');
 const jwt = require('jsonwebtoken');
+const bcrypt=require('bcrypt')
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -67,8 +68,8 @@ app.post('/register', (req, res) => {
     } else {
       console.log('Email verifikasi terkirim: ' + info.response);
       const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
-
-      db.query(sql, [firstName, lastName, email, username, password], (error, result) => {
+      
+      db.query(sql, [firstName, lastName, email, username, bcrypt.hash(password, 10)], (error, result) => {
         if (error) {
           console.error('Error executing SQL query:', error);
           return res.status(500).json({ message: 'Internal Server Error' });
