@@ -57,7 +57,7 @@ app.post('/register', (req, res) => {
     from: 'kallatracking01@gmail.com',
     to: email,
     subject: 'Verifikasi Email',
-    text: `Klik tautan ini untuk verifikasi email Anda: http://127.0.0.1:3000/verify/${verificationToken}`,
+    text: `Klik tautan ini untuk verifikasi email Anda: https://mobile-kalla.vercel.app//verify/${verificationToken}`,
   };
 
   // Simpan pengguna yang belum diverifikasi dalam array
