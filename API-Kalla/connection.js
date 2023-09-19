@@ -1,7 +1,7 @@
-const mysql = require('mysql');
+const mysql = require('mysql2');
 
-// Konfigurasi koneksi ke database
-const dbConfig = {
+// Konfigurasi pool koneksi ke database
+const pool = mysql.createPool({
   // host: 'bnwraqawhrfuvvpy2tpx-mysql.services.clever-cloud.com',
   // user: 'uyozibhdvgm12nde', 
   // password: 'EFUIQF2Dj1x0yc99cYM9', 
@@ -9,19 +9,11 @@ const dbConfig = {
   host: process.env.DB_HOST,
   user: process.env.DB_USERNAME, 
   password: process.env.DB_PASSWORD, 
-  database: process.env.DB_DBNAME 
-};
-
-// Membuat koneksi ke database
-const connection = mysql.createConnection(dbConfig);
-
-// Membuka koneksi ke database
-connection.connect((err) => {
-  if (err) {
-    console.error('Koneksi ke database gagal:', err);
-  } else {
-    console.log('Terhubung ke database MySQL');
-  }
+  database: process.env.DB_DBNAME,
+  connectionLimit: 10, // Jumlah maksimum koneksi dalam pool
 });
 
-module.exports = connection;
+// Membuat pool koneksi
+const poolPromise = pool.promise();
+
+module.exports = poolPromise;
