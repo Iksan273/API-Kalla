@@ -7,7 +7,7 @@ const response = require('./response');
 const createVerificationToken = require('./createVerificationToken');
 const transporter = require('./transporter');
 const jwt = require('jsonwebtoken');
-const bcrypt=require('bcrypt')
+const bcrypt=require('bcryptjs')
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -73,7 +73,7 @@ app.post('/register', (req, res) => {
       const salt = await bcrypt.genSalt(10);
 
       // Enkripsi password
-      const hashedPassword = await bcrypt.hash(password, salt);
+      const hashedPassword = await bcrypt.hashSync(password, salt);
       db.query(sql, [firstName, lastName, email, username, hashedPassword], (error, result) => {
         if (error) {
           console.error('Error executing SQL query:', error);
@@ -134,7 +134,7 @@ app.post('/login', (req, res) => {
       }
 
       // Bandingkan password yang diberikan oleh pengguna dengan hashed password di database
-      const passwordMatch = await bcrypt.compare(password, user.password);
+      const passwordMatch = await bcrypt.compareSync(password, user.password);
 
       if (!passwordMatch) {
         return res.status(401).json({ message: 'Email atau kata sandi salah' });
