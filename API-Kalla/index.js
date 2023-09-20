@@ -111,7 +111,7 @@ app.get('/verify/:token', verifyToken, (req, res) => {
   } else {
     res.status(404).json({ message: 'Pengguna tidak ditemukan di dalam antrian verifikasi' });
   }
-});
+});   
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
 
@@ -143,10 +143,15 @@ app.post('/login', (req, res) => {
       res.status(200).json({ message: 'Login berhasil', user });
     });
   }
-});
+});                                                                         
 app.put('/profile/:userId', (req, res) => {
   const userId = req.params.userId; // Mendapatkan userId dari URL
   const { firstName, lastName, username, password } = req.body;
+
+  // Validasi data
+  if (!firstName || !lastName || !username || !password) {
+    return res.status(400).json({ message: 'Semua data harus terisi' });
+  }
 
   const updateQuery = "UPDATE user SET firstName = ?, lastName = ?, username = ?, password = ? WHERE id = ?";
   db.query(updateQuery, [firstName, lastName, username, password, userId], (error, result) => {
@@ -156,12 +161,13 @@ app.put('/profile/:userId', (req, res) => {
     }
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Pengguna tidak ditemukan' });
+      return res.status(404).json({  error: true,message: 'Pengguna tidak ditemukan' });
     }
 
-    res.status(200).json({ message: 'Profil pengguna berhasil diperbarui' });
+    res.status(200).json({  error: false,message: 'Profil pengguna berhasil diperbarui' });
   });
 });
+
 
 
 
