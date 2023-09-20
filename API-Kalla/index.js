@@ -152,6 +152,7 @@ app.put('/profile/:userId', async (req, res) => {
   if (!firstName || !lastName || !username || !password) {
     return res.status(400).json({ message: 'Semua data harus terisi' });
   }
+  const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hashSync(password, salt);
   const updateQuery = "UPDATE user SET firstName = ?, lastName = ?, username = ?, password = ? WHERE id = ?";
   db.query(updateQuery, [firstName, lastName, username, hashedPassword, userId], (error, result) => {
