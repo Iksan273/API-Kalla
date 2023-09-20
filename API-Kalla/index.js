@@ -144,7 +144,7 @@ app.post('/login', (req, res) => {
     });
   }
 });                                                                         
-app.put('/profile/:userId', (req, res) => {
+app.put('/profile/:userId', async (req, res) => {
   const userId = req.params.userId; // Mendapatkan userId dari URL
   const { firstName, lastName, username, password } = req.body;
 
@@ -152,9 +152,9 @@ app.put('/profile/:userId', (req, res) => {
   if (!firstName || !lastName || !username || !password) {
     return res.status(400).json({ message: 'Semua data harus terisi' });
   }
-
+  const hashedPassword = await bcrypt.hashSync(password, salt);
   const updateQuery = "UPDATE user SET firstName = ?, lastName = ?, username = ?, password = ? WHERE id = ?";
-  db.query(updateQuery, [firstName, lastName, username, password, userId], (error, result) => {
+  db.query(updateQuery, [firstName, lastName, username, hashedPassword, userId], (error, result) => {
     if (error) {
       console.error('Error executing SQL query:', error);
       return res.status(500).json({ message: 'Internal Server Error' });
