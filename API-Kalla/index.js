@@ -27,10 +27,10 @@ app.get('/verif', (req, res) => {
 });
 
 app.get('/success', (req, res) => {
-  res.render('verification-success');
+  res.render('Success');
 });
 app.get('/failed', (req, res) => {
-  res.render('verification-failed');
+  res.render('failed');
 });
 
 // Middleware untuk memeriksa token verifikasi
