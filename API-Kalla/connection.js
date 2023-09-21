@@ -5,7 +5,10 @@ const dbConfig = {
   host: 'bnwraqawhrfuvvpy2tpx-mysql.services.clever-cloud.com',
   user: 'uyozibhdvgm12nde', 
   password: 'EFUIQF2Dj1x0yc99cYM9', 
-  database: 'bnwraqawhrfuvvpy2tpx' 
+  database: 'bnwraqawhrfuvvpy2tpx' ,
+  waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 };
 // Membuat koneksi ke database
 const connection = mysql.createConnection(dbConfig);
