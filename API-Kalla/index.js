@@ -15,6 +15,24 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Array untuk menyimpan data pengguna yang belum diverifikasi
 const unverifiedUsers = [];
 
+app.set('view engine', 'ejs');
+
+
+// Mengatur direktori tampilan (views)
+app.set('views', __dirname + '/views');
+app.use(express.static(__dirname + '/views'));
+
+app.get('/verif', (req, res) => {
+  res.render('index');
+});
+
+app.get('/success', (req, res) => {
+  res.render('verification-success');
+});
+app.get('/failed', (req, res) => {
+  res.render('verification-failed');
+});
+
 // Middleware untuk memeriksa token verifikasi
 const verifyToken = (req, res, next) => {
   const token = req.params.token;
@@ -57,7 +75,8 @@ app.post('/register', (req, res) => {
     from: 'kallatracking01@gmail.com',
     to: email,
     subject: 'Verifikasi Email',
-    text: `Klik tautan ini untuk verifikasi email Anda: https://mobile-kalla.vercel.app//verify/${verificationToken}`,
+    // text: `Klik tautan ini untuk verifikasi email Anda: https://mobile-kalla.vercel.app//verify/${verificationToken}`,
+    text: `Klik tautan ini untuk verifikasi email Anda: https://mobile-kalla.vercel.app/verify/${verificationToken}`,
   };
 
   // Simpan pengguna yang belum diverifikasi dalam array
@@ -105,11 +124,14 @@ app.get('/verify/:token', verifyToken, (req, res) => {
         return res.status(500).json({ message: 'Internal Server Error' });
       }
       // Hapus pengguna dari array unverifiedUsers
-      unverifiedUsers.splice(unverifiedUserIndex, 1);
-      res.status(200).json({ message: 'Email berhasil diverifikasi' });
+      unverifiedUsers.splice(unverifiedUserIndex, 1); 
+      res.redirect('/success');
+      // res.status(200).json({ message: 'Email berhasil diverifikasi' });
+     
     });
   } else {
-    res.status(404).json({ message: 'Pengguna tidak ditemukan di dalam antrian verifikasi' });
+    res.redirect('/failed');
+    // res.status(404).json({ message: 'Pengguna tidak ditemukan di dalam antrian verifikasi' });
   }
 });   
 app.post('/login', (req, res) => {
