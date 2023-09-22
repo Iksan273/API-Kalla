@@ -7,8 +7,8 @@ const dbConfig = {
   password: 'EFUIQF2Dj1x0yc99cYM9', 
   database: 'bnwraqawhrfuvvpy2tpx' ,
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  // connectionLimit: 10,
+  // queueLimit: 0
 };
 // Membuat koneksi ke database
 const connection = mysql.createConnection(dbConfig);
