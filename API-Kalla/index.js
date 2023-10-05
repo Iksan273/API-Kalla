@@ -159,7 +159,7 @@ app.post('/login', (req, res) => {
       const passwordMatch = await bcrypt.compareSync(password, user.password);
 
       if (!passwordMatch) {
-        return res.status(401).json({ message: 'Email atau kata sandi salah' });
+        return res.status(200).json({ message: 'Email atau kata sandi salah' });
       }
 
       res.status(200).json({ message: 'Login berhasil', user });
