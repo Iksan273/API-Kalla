@@ -184,7 +184,7 @@ app.put('/profile/:userId', async (req, res) => {
     }
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({  error: true,message: 'Pengguna tidak ditemukan' });
+      return res.status(404).json({  error: true,message: 'Pengguna tidak ditemukann' });
     }
 
     res.status(200).json({  error: false,message: 'Profil pengguna berhasil diperbarui' });
