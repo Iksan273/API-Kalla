@@ -214,6 +214,61 @@ app.put('/profileImage/:userId', async (req, res) => {
     res.status(200).json({  error: false,message: 'Foto Profile Berhasil di update' });
   });
 });
+app.get('/historyUser/:userId', (req, res) => {
+  const user_id = req.params.userId; 
+  const sql = "SELECT * FROM history WHERE user_id = ? AND status = 'received'";
+  db.query(sql, [user_id], (err, results) => {
+    if (err) {
+      console.error('Error executing SQL query:', err);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'No history found' });
+    }
+
+    // Data ditemukan, berikan respons
+    res.status(200).json({ message: "Success Get History", data:results });
+  });
+});
+
+
+app.post('/history', (req, res) => {
+  const { noOrder, date, status, user_id } = req.body;
+  if (!noOrder || !date || !status || !user_id) {
+    return res.status(400).json({ message: 'Semua data harus terisi' });
+  }
+  const formattedDate = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
+
+  // Query ke database untuk memeriksa apakah riwayat sudah ada
+  const checkQuery = `SELECT * FROM history WHERE noOrder = '${noOrder}' AND user_id = ${user_id}`;
+
+  db.query(checkQuery, (err, result) => {
+    if (err) {
+      console.error('Error:', err);
+      res.status(500).json({ error: 'Terjadi kesalahan' });
+    } else if (result.length > 0) {
+      // Riwayat sudah ada
+      res.json({ message: 'Riwayat sudah ada' });
+    } else {
+      // Query untuk menambahkan riwayat baru
+      const insertQuery = `INSERT INTO history (noOrder, date, status, user_id) VALUES ('${noOrder}', '${formattedDate}', '${status}', ${user_id})`;
+
+      db.query(insertQuery, (err, result) => {
+        if (err) {
+          console.error('Error:', err);
+          res.status(500).json({ error: 'Terjadi kesalahan' });
+        } else {
+          // Riwayat berhasil ditambahkan
+          res.json({ message: 'Riwayat berhasil ditambahkan' });
+        }
+      });
+    }
+  });
+});
+
+
+
 
 
 
