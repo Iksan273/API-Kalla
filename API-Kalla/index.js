@@ -8,6 +8,7 @@ const createVerificationToken = require('./createVerificationToken');
 const transporter = require('./transporter');
 const jwt = require('jsonwebtoken');
 const bcrypt=require('bcryptjs')
+const pool = require('./connection');
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -54,14 +55,25 @@ app.get('/', (req, res)=>{
 
 app.get('/users', (req, res) => {
   const sql = "SELECT * FROM user";
-  db.query(sql, (error, result) => {
+
+  pool.getConnection((error, connection) => {
     if (error) {
-      console.error('Error executing SQL query:', error);
+      console.error('Error getting connection from pool:', error);
       return res.status(500).json({ message: 'Internal Server Error' });
     }
-    response(200, result, "Success Get Data", res);
+
+    connection.query(sql, (queryError, result) => {
+      connection.release(); 
+
+      if (queryError) {
+        console.error('Error executing SQL query:', queryError);
+        return res.status(500).json({ message: 'Internal Server Error' });
+      }
+      response(200, result, "Success Get Data", res);
+    });
   });
 });
+
 
 app.post('/register', (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
@@ -75,7 +87,6 @@ app.post('/register', (req, res) => {
     from: 'kallatracking01@gmail.com',
     to: email,
     subject: 'Verifikasi Email',
-    // text: `Klik tautan ini untuk verifikasi email Anda: https://mobile-kalla.vercel.app//verify/${verificationToken}`,
     text: `Klik tautan ini untuk verifikasi email Anda: https://mobile-kalla.vercel.app/verify/${verificationToken}`,
   };
 
@@ -93,21 +104,31 @@ app.post('/register', (req, res) => {
 
       // Enkripsi password
       const hashedPassword = await bcrypt.hashSync(password, salt);
-      db.query(sql, [firstName, lastName, email, username, hashedPassword], (error, result) => {
-        if (error) {
-          console.error('Error executing SQL query:', error);
+
+      // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
+      pool.getConnection((connectionError, connection) => {
+        if (connectionError) {
+          console.error('Error getting connection from pool:', connectionError);
           return res.status(500).json({ message: 'Internal Server Error' });
         }
-        res.status(201).json({ error: false, message: 'Pendaftaran berhasil. Silakan verifikasi email Anda.' });
+
+        // Eksekusi query menggunakan koneksi dari pool
+        connection.query(sql, [firstName, lastName, email, username, hashedPassword], (queryError, result) => {
+          connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
+
+          if (queryError) {
+            console.error('Error executing SQL query:', queryError);
+            return res.status(500).json({ message: 'Internal Server Error' });
+          }
+          res.status(201).json({ error: false, message: 'Pendaftaran berhasil. Silakan verifikasi email Anda.' });
+        });
       });
     }
-    })
   });
+});
 
 
-// Rute untuk verifikasi email
 app.get('/verify/:token', verifyToken, (req, res) => {
-  // Mendapatkan email dari informasi token
   const email = req.decoded.email;
 
   // Cari pengguna yang belum diverifikasi berdasarkan email
@@ -118,22 +139,30 @@ app.get('/verify/:token', verifyToken, (req, res) => {
     // Ubah status pengguna menjadi "verified" di basis data
     const sql = "UPDATE user SET isVerified = '1' WHERE email = ?";
 
-    db.query(sql, [user.email], (error, result) => {
-      if (error) {
-        console.error('Error executing SQL query:', error);
+    // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
+    pool.getConnection((connectionError, connection) => {
+      if (connectionError) {
+        console.error('Error getting connection from pool:', connectionError);
         return res.status(500).json({ message: 'Internal Server Error' });
       }
-      // Hapus pengguna dari array unverifiedUsers
-      unverifiedUsers.splice(unverifiedUserIndex, 1); 
-      res.redirect('/success');
-      // res.status(200).json({ message: 'Email berhasil diverifikasi' });
-     
+
+      // Eksekusi query menggunakan koneksi dari pool
+      connection.query(sql, [user.email], (queryError, result) => {
+        connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
+
+        if (queryError) {
+          console.error('Error executing SQL query:', queryError);
+          return res.status(500).json({ message: 'Internal Server Error' });
+        }
+        unverifiedUsers.splice(unverifiedUserIndex, 1);
+        res.redirect('/success');
+      });
     });
   } else {
     res.redirect('/failed');
-    // res.status(404).json({ message: 'Pengguna tidak ditemukan di dalam antrian verifikasi' });
   }
-});   
+});
+
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
 
@@ -141,31 +170,45 @@ app.post('/login', (req, res) => {
     return res.status(400).json({ message: 'Email dan password diperlukan' });
   } else {
     const sql = "SELECT * FROM user WHERE email = ?";
-    db.query(sql, [email], async (error, results) => {
-      if (error) {
-        console.error('Error executing SQL query:', error);
+    
+    // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
+    pool.getConnection((connectionError, connection) => {
+      if (connectionError) {
+        console.error('Error getting connection from pool:', connectionError);
         return res.status(500).json({ message: 'Internal Server Error' });
       }
-      if (results.length === 0) {
-        return res.status(200).json({ message: 'Email atau kata sandi salah' });
-      }
-      const user = results[0];
 
-      if (user.isVerified === 0) {
-        return res.status(200).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
-      }
+      // Eksekusi query menggunakan koneksi dari pool
+      connection.query(sql, [email], async (queryError, results) => {
+        connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
 
-      // Bandingkan password yang diberikan oleh pengguna dengan hashed password di database
-      const passwordMatch = await bcrypt.compareSync(password, user.password);
+        if (queryError) {
+          console.error('Error executing SQL query:', queryError);
+          return res.status(500).json({ message: 'Internal Server Error' });
+        }
+        
+        if (results.length === 0) {
+          return res.status(200).json({ message: 'Email atau kata sandi salah' });
+        }
+        const user = results[0];
 
-      if (!passwordMatch) {
-        return res.status(200).json({ message: 'Email atau kata sandi salah' });
-      }
+        if (user.isVerified === 0) {
+          return res.status(200).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
+        }
 
-      res.status(200).json({ message: 'Login berhasil', user });
+        // Bandingkan password yang diberikan oleh pengguna dengan hashed password di database
+        const passwordMatch = await bcrypt.compareSync(password, user.password);
+
+        if (!passwordMatch) {
+          return res.status(200).json({ message: 'Email atau kata sandi salah' });
+        }
+
+        res.status(200).json({ message: 'Login berhasil', user });
+      });
     });
   }
-});                                                                         
+});
+                                                               
 app.put('/profile/:userId', async (req, res) => {
   const userId = req.params.userId; // Mendapatkan userId dari URL
   const { firstName, lastName, username, password } = req.body;
@@ -177,61 +220,90 @@ app.put('/profile/:userId', async (req, res) => {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hashSync(password, salt);
   const updateQuery = "UPDATE user SET firstName = ?, lastName = ?, username = ?, password = ? WHERE id = ?";
-  db.query(updateQuery, [firstName, lastName, username, hashedPassword, userId], (error, result) => {
-    if (error) {
-      console.error('Error executing SQL query:', error);
+
+  pool.getConnection((connectionError, connection) => {
+    if (connectionError) {
+      console.error('Error getting connection from pool:', connectionError);
       return res.status(500).json({ message: 'Internal Server Error' });
     }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({  error: true,message: 'Pengguna tidak ditemukann' });
-    }
+    connection.query(updateQuery, [firstName, lastName, username, hashedPassword, userId], (queryError, result) => {
+      connection.release();
 
-    res.status(200).json({  error: false,message: 'Profil pengguna berhasil diperbarui' });
+      if (queryError) {
+        console.error('Error executing SQL query:', queryError);
+        return res.status(500).json({ message: 'Internal Server Error' });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: true, message: 'Pengguna tidak ditemukan' });
+      }
+
+      res.status(200).json({ error: false, message: 'Profil pengguna berhasil diperbarui' });
+    });
   });
 });
 
-app.put('/profileImage/:userId', async (req, res) => {
+app.put('/profileImage/:userId', (req, res) => {
   const userId = req.params.userId; // Mendapatkan userId dari URL
-  const {url } = req.body;
+  const { url } = req.body;
 
   // Validasi data
   if (!url) {
     return res.status(400).json({ message: 'Semua data harus terisi' });
   }
- 
+
   const updateQuery = "UPDATE user SET urlImage = ? WHERE id = ?";
-  db.query(updateQuery, [url, userId], (error, result) => {
-    if (error) {
-      console.error('Error executing SQL query:', error);
+
+  pool.getConnection((connectionError, connection) => {
+    if (connectionError) {
+      console.error('Error getting connection from pool:', connectionError);
       return res.status(500).json({ message: 'Internal Server Error' });
     }
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({  error: true,message: 'Pengguna tidak ditemukan' });
-    }
+    connection.query(updateQuery, [url, userId], (queryError, result) => {
+      connection.release();
 
-    res.status(200).json({  error: false,message: 'Foto Profile Berhasil di update' });
+      if (queryError) {
+        console.error('Error executing SQL query:', queryError);
+        return res.status(500).json({ message: 'Internal Server Error' });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: true, message: 'Pengguna tidak ditemukan' });
+      }
+
+      res.status(200).json({ error: false, message: 'Foto Profile Berhasil di update' });
+    });
   });
 });
+
 app.get('/historyUser/:userId', (req, res) => {
-  const user_id = req.params.userId; 
+  const userId = req.params.userId;
   const sql = "SELECT * FROM history WHERE user_id = ? AND status = 'received'";
-  db.query(sql, [user_id], (err, results) => {
-    if (err) {
-      console.error('Error executing SQL query:', err);
+
+  pool.getConnection((connectionError, connection) => {
+    if (connectionError) {
+      console.error('Error getting connection from pool:', connectionError);
       return res.status(500).json({ message: 'Internal Server Error' });
     }
 
-    if (results.length === 0) {
-      return res.status(404).json({ message: 'No history found' });
-    }
+    connection.query(sql, [userId], (queryError, results) => {
+      connection.release();
 
-    // Data ditemukan, berikan respons
-    res.status(200).json({ message: "Success Get History", data:results });
+      if (queryError) {
+        console.error('Error executing SQL query:', queryError);
+        return res.status(500).json({ message: 'Internal Server Error' });
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ message: 'No history found' });
+      }
+
+      res.status(200).json({ message: 'Success Get History', data: results });
+    });
   });
 });
-
 
 app.post('/history', (req, res) => {
   const { noOrder, date, status, user_id } = req.body;
@@ -240,40 +312,39 @@ app.post('/history', (req, res) => {
   }
   const formattedDate = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
 
-  // Query ke database untuk memeriksa apakah riwayat sudah ada
-  const checkQuery = `SELECT * FROM history WHERE noOrder = '${noOrder}' AND user_id = ${user_id}`;
+  const checkQuery = "SELECT * FROM history WHERE noOrder = ? AND user_id = ?";
 
-  db.query(checkQuery, (err, result) => {
-    if (err) {
-      console.error('Error:', err);
-      res.status(500).json({ error: 'Terjadi kesalahan' });
-    } else if (result.length > 0) {
-      // Riwayat sudah ada
-      res.json({ message: 'Riwayat sudah ada' });
-    } else {
-      // Query untuk menambahkan riwayat baru
-      const insertQuery = `INSERT INTO history (noOrder, date, status, user_id) VALUES ('${noOrder}', '${formattedDate}', '${status}', ${user_id})`;
-
-      db.query(insertQuery, (err, result) => {
-        if (err) {
-          console.error('Error:', err);
-          res.status(500).json({ error: 'Terjadi kesalahan' });
-        } else {
-          // Riwayat berhasil ditambahkan
-          res.json({ message: 'Riwayat berhasil ditambahkan' });
-        }
-      });
+  pool.getConnection((connectionError, connection) => {
+    if (connectionError) {
+      console.error('Error getting connection from pool:', connectionError);
+      return res.status(500).json({ message: 'Internal Server Error' });
     }
+
+    connection.query(checkQuery, [noOrder, user_id], (queryError, result) => {
+      if (queryError) {
+        connection.release();
+        console.error('Error:', queryError);
+        res.status(500).json({ error: 'Terjadi kesalahan' });
+      } else if (result.length > 0) {
+        connection.release();
+        res.json({ message: 'Riwayat sudah ada' });
+      } else {
+        const insertQuery = "INSERT INTO history (noOrder, date, status, user_id) VALUES (?, ?, ?, ?)";
+
+        connection.query(insertQuery, [noOrder, formattedDate, status, user_id], (insertError, insertResult) => {
+          connection.release();
+
+          if (insertError) {
+            console.error('Error:', insertError);
+            res.status(500).json({ error: 'Terjadi kesalahan' });
+          } else {
+            res.json({ message: 'Riwayat berhasil ditambahkan' });
+          }
+        });
+      }
+    });
   });
 });
-
-
-
-
-
-
-
-
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
