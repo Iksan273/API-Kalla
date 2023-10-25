@@ -306,8 +306,8 @@ app.get('/historyUser/:userId', (req, res) => {
 });
 
 app.post('/history', (req, res) => {
-  const { noOrder, date, status, user_id } = req.body;
-  if (!noOrder || !date || !status || !user_id) {
+  const { noOrder, date, status, description, user_id } = req.body;
+  if (!noOrder || !date || !status || !user_id || !description) {
     return res.status(400).json({ message: 'Semua data harus terisi' });
   }
   const formattedDate = new Date(date).toISOString().slice(0, 19).replace('T', ' ');
@@ -324,21 +324,21 @@ app.post('/history', (req, res) => {
       if (queryError) {
         connection.release();
         console.error('Error:', queryError);
-        res.status(500).json({ error: 'Terjadi kesalahan' });
+        res.status(500).json({ error: 'Terjadi kesalahan dalam pengecekan riwayat' });
       } else if (result.length > 0) {
         connection.release();
-        res.json({ message: 'Riwayat sudah ada' });
+        res.status(409).json({error: true, message: 'Riwayat sudah ada' });
       } else {
-        const insertQuery = "INSERT INTO history (noOrder, date, status, user_id) VALUES (?, ?, ?, ?)";
+        const insertQuery = "INSERT INTO history (noOrder, date, status, description, user_id) VALUES (?, ?, ?, ?, ?)";
 
-        connection.query(insertQuery, [noOrder, formattedDate, status, user_id], (insertError, insertResult) => {
+        connection.query(insertQuery, [noOrder, formattedDate, status, description, user_id], (insertError, insertResult) => {
           connection.release();
 
           if (insertError) {
             console.error('Error:', insertError);
-            res.status(500).json({ error: 'Terjadi kesalahan' });
+            res.status(500).json({ error: false,message: 'Terjadi kesalahan dalam penambahan riwayat' });
           } else {
-            res.json({ message: 'Riwayat berhasil ditambahkan' });
+            res.status(200).json({error: false, message: 'Riwayat berhasil ditambahkan' });
           }
         });
       }
