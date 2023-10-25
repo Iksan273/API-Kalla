@@ -188,19 +188,19 @@ app.post('/login', (req, res) => {
         }
         
         if (results.length === 0) {
-          return res.status(200).json({ message: 'Email atau kata sandi salah' });
+          return res.status(401).json({ message: 'Email atau kata sandi salah' });
         }
         const user = results[0];
 
         if (user.isVerified === 0) {
-          return res.status(200).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
+          return res.status(403).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
         }
 
         // Bandingkan password yang diberikan oleh pengguna dengan hashed password di database
         const passwordMatch = await bcrypt.compareSync(password, user.password);
 
         if (!passwordMatch) {
-          return res.status(200).json({ message: 'Email atau kata sandi salah' });
+          return res.status(401).json({ message: 'Email atau kata sandi salah' });
         }
 
         res.status(200).json({ message: 'Login berhasil', user });
@@ -208,6 +208,7 @@ app.post('/login', (req, res) => {
     });
   }
 });
+
                                                                
 app.put('/profile/:userId', async (req, res) => {
   const userId = req.params.userId; // Mendapatkan userId dari URL
