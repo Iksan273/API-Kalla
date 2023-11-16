@@ -74,6 +74,132 @@ app.get('/users', (req, res) => {
   });
 });
 
+app.post('/forgotPassword', (req, res) => {
+  const { email } = req.body;
+  const expirationTimeInMinutes = 5; 
+  pool.getConnection((err, connection) => {
+    if (err) {
+      console.error('Error getting connection from pool', err);
+      return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+    }
+
+    // Cek apakah access code untuk email tersebut sudah ada di database
+    connection.query('SELECT * FROM forgot_password WHERE email = ?', [email], (selectError, selectResults) => {
+      if (selectError) {
+        console.error('Error querying database', selectError);
+        connection.release();
+        return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+      }
+
+      let accessCode = generateAccessCode();
+      let expirationTime = new Date();
+      expirationTime.setMinutes(expirationTime.getMinutes() + expirationTimeInMinutes);
+
+      if (selectResults.length > 0) {
+        // Access code sudah ada, lakukan perintah update
+        connection.query(
+          'UPDATE forgot_password SET access_code = ?, expired= ? WHERE email = ?',
+          [accessCode, expirationTime, email],
+          (updateError, updateResults) => {
+            connection.release();
+
+            if (updateError) {
+              console.error('Error updating access code', updateError);
+              return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+            }
+
+            sendEmail(email, accessCode, res);
+          }
+        );
+      } else {
+        // Access code belum ada, lakukan perintah insert
+        connection.query(
+          'INSERT INTO forgot_password (email, access_code, expired) VALUES (?, ?, ?)',
+          [email, accessCode, expirationTime],
+          (insertError, insertResults) => {
+            connection.release();
+
+            if (insertError) {
+              console.error('Error inserting access code', insertError);
+              return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+            }
+
+            sendEmail(email, accessCode, res);
+          }
+        );
+      }
+    });
+  });
+});
+function sendEmail(email, accessCode, res) {
+  const mailOptions = {
+    from: 'kallatracking01@gmail.com',
+    to: email,
+    subject: 'Forgot Password',
+    text: `Gunakan kode akses berikut untuk mereset password Anda: ${accessCode}`,
+  };
+
+  transporter.sendMail(mailOptions, (emailError, info) => {
+    if (emailError) {
+      console.error('Error sending email', emailError);
+      res.status(500).json({ message: 'Gagal mengirim email forgot password' });
+    } else {
+      res.status(200).json({ message: 'Email Forgot Password Terkirim' });
+      console.log('Email forgot password terkirim: ' + info.response);
+    }
+  });
+}
+// Fungsi untuk menghasilkan akses code
+function generateAccessCode() {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+}
+
+app.post('/verifyAccessCode', (req, res) => {
+  const { email, accessCode } = req.body;
+
+  // Memeriksa apakah access code valid
+  verifyAccessCode(email, accessCode)
+    .then((isValid) => {
+      if (isValid) {
+        res.status(200).json({ message: 'Access Code Valid' });
+      } else {
+        res.status(401).json({ message: 'Access Code Tidak Valid atau Sudah Kedaluwarsa' });
+      }
+    })
+    .catch((error) => {
+      console.error('Error verifying access code', error);
+      res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+    });
+});
+function verifyAccessCode(email, accessCode) {
+  return new Promise((resolve, reject) => {
+    pool.getConnection((err, connection) => {
+      if (err) {
+        console.error('Error getting connection from pool', err);
+        reject(false);
+      }
+
+      connection.query(
+        'SELECT * FROM forgot_password WHERE email = ? AND access_code = ? AND expired < NOW()',
+        [email, accessCode],
+        (error, results) => {
+          connection.release();
+
+          if (error) {
+            console.error('Error verifying access code', error);
+            reject(false);
+          }
+
+          if (results.length > 0) {
+            resolve(true); 
+          } else {
+            resolve(false); 
+          }
+        }
+      );
+    });
+  });
+}
 
 app.post('/register', (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
@@ -244,6 +370,40 @@ app.put('/profile/:userId', async (req, res) => {
     });
   });
 });
+
+app.post('/updatePassword', async (req, res) => {
+  const { email, password } = req.body;
+
+  // Validasi data
+  if ( !email || !password) {
+    return res.status(400).json({ message: 'Semua data harus terisi' });
+  }
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hashSync(password, salt);
+  const updateQuery = "UPDATE user SET password = ? WHERE email = ?";
+
+  pool.getConnection((connectionError, connection) => {
+    if (connectionError) {
+      console.error('Error getting connection from pool:', connectionError);
+      return res.status(500).json({ message: 'Internal Server Error' });
+    }
+
+    connection.query(updateQuery, [ hashedPassword, email], (queryError, result) => {
+      connection.release();
+
+      if (queryError) {
+        console.error('Error executing SQL query:', queryError);
+        return res.status(500).json({ message: 'Internal Server Error' });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: true, message: 'Pengguna tidak ditemukan' });
+      }
+
+      res.status(200).json({ error: false, message: 'Password berhasil diperbarui' });
+    });
+  });
+}); 
 
 app.put('/profileImage/:userId', (req, res) => {
   const userId = req.params.userId; // Mendapatkan userId dari URL
