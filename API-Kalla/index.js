@@ -9,6 +9,7 @@ const transporter = require('./transporter');
 const jwt = require('jsonwebtoken');
 const bcrypt=require('bcryptjs')
 const pool = require('./connection');
+const moment = require('moment-timezone');
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -97,8 +98,8 @@ app.post('/forgotPassword', (req, res) => {
         return res.status(404).json({ message: 'Email tidak ditemukan' });
       }
       let accessCode = generateAccessCode();
-      let expirationTime = new Date();
-      expirationTime.setMinutes(expirationTime.getMinutes() + expirationTimeInMinutes);
+      let expirationTime = moment().add(expirationTimeInMinutes, 'minutes').tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
+
 
       connection.query('SELECT * FROM forgot_password WHERE email = ?', [email], (selectError, selectResults) => {
         if (selectError) {
@@ -192,10 +193,11 @@ function verifyAccessCode(email, accessCode) {
         console.error('Error getting connection from pool', err);
         reject(false);
       }
+      const currentTimeInAsiaJakarta = moment().tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
 
       connection.query(
-        'SELECT * FROM forgot_password WHERE email = ? AND access_code = ? AND expired < NOW()',
-        [email, accessCode],
+        'SELECT * FROM forgot_password WHERE email = ? AND access_code = ? AND expired > ?',
+        [email, accessCode, currentTimeInAsiaJakarta],
         (error, results) => {
           connection.release();
 
@@ -214,7 +216,6 @@ function verifyAccessCode(email, accessCode) {
     });
   });
 }
-
 app.post('/register', (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
   if (!firstName || !lastName || !email || !username || !password) {
