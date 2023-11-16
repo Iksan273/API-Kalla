@@ -216,6 +216,41 @@ function verifyAccessCode(email, accessCode) {
     });
   });
 }
+app.post('/updatePassword', async (req, res) => {
+  const { email, password } = req.body;
+
+  // Validasi data
+  if ( !email || !password) {
+    return res.status(400).json({ message: 'Semua data harus terisi' });
+  }
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hashSync(password, salt);
+  const updateQuery = "UPDATE user SET password = ? WHERE email = ?";
+
+  pool.getConnection((connectionError, connection) => {
+    if (connectionError) {
+      console.error('Error getting connection from pool:', connectionError);
+      return res.status(500).json({ error: false,message: 'Internal Server Error' });
+    }
+
+    connection.query(updateQuery, [ hashedPassword, email], (queryError, result) => {
+      connection.release();
+
+      if (queryError) {
+        console.error('Error executing SQL query:', queryError);
+        return res.status(500).json({ error: false,message: 'Internal Server Error' });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: true, message: 'Pengguna tidak ditemukan' });
+      }
+
+      res.status(200).json({ error: false, message: 'Password berhasil diperbarui' });
+    });
+  });
+}); 
+
+
 app.post('/register', (req, res) => {
   const { firstName, lastName, email, username, password } = req.body;
   if (!firstName || !lastName || !email || !username || !password) {
