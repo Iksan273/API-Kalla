@@ -76,61 +76,75 @@ app.get('/users', (req, res) => {
 
 app.post('/forgotPassword', (req, res) => {
   const { email } = req.body;
-  const expirationTimeInMinutes = 5; 
+  const expirationTimeInMinutes = 5;
+
+  // Check if the email exists in the user table
   pool.getConnection((err, connection) => {
     if (err) {
       console.error('Error getting connection from pool', err);
       return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
     }
 
-    // Cek apakah access code untuk email tersebut sudah ada di database
-    connection.query('SELECT * FROM forgot_password WHERE email = ?', [email], (selectError, selectResults) => {
-      if (selectError) {
-        console.error('Error querying database', selectError);
+    connection.query('SELECT * FROM user WHERE email = ?', [email], (userSelectError, userSelectResults) => {
+      if (userSelectError) {
+        console.error('Error querying user database', userSelectError);
         connection.release();
         return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
       }
 
+      if (userSelectResults.length === 0) {
+        connection.release();
+        return res.status(404).json({ message: 'Email tidak ditemukan' });
+      }
       let accessCode = generateAccessCode();
       let expirationTime = new Date();
       expirationTime.setMinutes(expirationTime.getMinutes() + expirationTimeInMinutes);
 
-      if (selectResults.length > 0) {
-        // Access code sudah ada, lakukan perintah update
-        connection.query(
-          'UPDATE forgot_password SET access_code = ?, expired= ? WHERE email = ?',
-          [accessCode, expirationTime, email],
-          (updateError, updateResults) => {
-            connection.release();
+      connection.query('SELECT * FROM forgot_password WHERE email = ?', [email], (selectError, selectResults) => {
+        if (selectError) {
+          console.error('Error querying forgot_password database', selectError);
+          connection.release();
+          return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+        }
 
-            if (updateError) {
-              console.error('Error updating access code', updateError);
-              return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+        if (selectResults.length > 0) {
+          // Access code sudah ada, lakukan perintah update
+          connection.query(
+            'UPDATE forgot_password SET access_code = ?, expired= ? WHERE email = ?',
+            [accessCode, expirationTime, email],
+            (updateError, updateResults) => {
+              connection.release();
+
+              if (updateError) {
+                console.error('Error updating access code', updateError);
+                return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+              }
+
+              sendEmail(email, accessCode, res);
             }
+          );
+        } else {
+          // Access code belum ada, lakukan perintah insert
+          connection.query(
+            'INSERT INTO forgot_password (email, access_code, expired) VALUES (?, ?, ?)',
+            [email, accessCode, expirationTime],
+            (insertError, insertResults) => {
+              connection.release();
 
-            sendEmail(email, accessCode, res);
-          }
-        );
-      } else {
-        // Access code belum ada, lakukan perintah insert
-        connection.query(
-          'INSERT INTO forgot_password (email, access_code, expired) VALUES (?, ?, ?)',
-          [email, accessCode, expirationTime],
-          (insertError, insertResults) => {
-            connection.release();
+              if (insertError) {
+                console.error('Error inserting access code', insertError);
+                return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+              }
 
-            if (insertError) {
-              console.error('Error inserting access code', insertError);
-              return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+              sendEmail(email, accessCode, res);
             }
-
-            sendEmail(email, accessCode, res);
-          }
-        );
-      }
+          );
+        }
+      });
     });
   });
 });
+
 function sendEmail(email, accessCode, res) {
   const mailOptions = {
     from: 'kallatracking01@gmail.com',
