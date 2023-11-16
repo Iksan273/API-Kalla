@@ -83,19 +83,19 @@ app.post('/forgotPassword', (req, res) => {
   pool.getConnection((err, connection) => {
     if (err) {
       console.error('Error getting connection from pool', err);
-      return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+      return res.status(500).json({error: true, message: 'Terjadi kesalahan dalam server' });
     }
 
     connection.query('SELECT * FROM user WHERE email = ?', [email], (userSelectError, userSelectResults) => {
       if (userSelectError) {
         console.error('Error querying user database', userSelectError);
         connection.release();
-        return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+        return res.status(500).json({error: true, message: 'Terjadi kesalahan dalam server' });
       }
 
       if (userSelectResults.length === 0) {
         connection.release();
-        return res.status(404).json({ message: 'Email tidak ditemukan' });
+        return res.status(404).json({error: true, message: 'Email tidak ditemukan' });
       }
       let accessCode = generateAccessCode();
       let expirationTime = moment().add(expirationTimeInMinutes, 'minutes').tz('Asia/Jakarta').format('YYYY-MM-DD HH:mm:ss');
@@ -105,7 +105,7 @@ app.post('/forgotPassword', (req, res) => {
         if (selectError) {
           console.error('Error querying forgot_password database', selectError);
           connection.release();
-          return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+          return res.status(500).json({ error: true, message: 'Terjadi kesalahan dalam server' });
         }
 
         if (selectResults.length > 0) {
@@ -118,7 +118,7 @@ app.post('/forgotPassword', (req, res) => {
 
               if (updateError) {
                 console.error('Error updating access code', updateError);
-                return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+                return res.status(500).json({error: true, message: 'Terjadi kesalahan dalam server' });
               }
 
               sendEmail(email, accessCode, res);
@@ -134,7 +134,7 @@ app.post('/forgotPassword', (req, res) => {
 
               if (insertError) {
                 console.error('Error inserting access code', insertError);
-                return res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+                return res.status(500).json({error: true, message: 'Terjadi kesalahan dalam server' });
               }
 
               sendEmail(email, accessCode, res);
@@ -157,9 +157,9 @@ function sendEmail(email, accessCode, res) {
   transporter.sendMail(mailOptions, (emailError, info) => {
     if (emailError) {
       console.error('Error sending email', emailError);
-      res.status(500).json({ message: 'Gagal mengirim email forgot password' });
+      res.status(500).json({error: true, message: 'Gagal mengirim email forgot password' });
     } else {
-      res.status(200).json({ message: 'Email Forgot Password Terkirim' });
+      res.status(200).json({ error: false,message: 'Email Forgot Password Terkirim' });
       console.log('Email forgot password terkirim: ' + info.response);
     }
   });
@@ -176,14 +176,14 @@ app.post('/verifyAccessCode', (req, res) => {
   verifyAccessCode(email, accessCode)
     .then((isValid) => {
       if (isValid) {
-        res.status(200).json({ message: 'Access Code Valid' });
+        res.status(200).json({error: false, message: 'Access Code Valid' });
       } else {
-        res.status(401).json({ message: 'Access Code Tidak Valid atau Sudah Kedaluwarsa' });
+        res.status(401).json({ error: true,message: 'Access Code Tidak Valid atau Sudah Kedaluwarsa' });
       }
     })
     .catch((error) => {
       console.error('Error verifying access code', error);
-      res.status(500).json({ message: 'Terjadi kesalahan dalam server' });
+      res.status(500).json({error: true, message: 'Terjadi kesalahan dalam server' });
     });
 });
 function verifyAccessCode(email, accessCode) {
@@ -400,7 +400,7 @@ app.post('/updatePassword', async (req, res) => {
   pool.getConnection((connectionError, connection) => {
     if (connectionError) {
       console.error('Error getting connection from pool:', connectionError);
-      return res.status(500).json({ message: 'Internal Server Error' });
+      return res.status(500).json({ error: false,message: 'Internal Server Error' });
     }
 
     connection.query(updateQuery, [ hashedPassword, email], (queryError, result) => {
@@ -408,7 +408,7 @@ app.post('/updatePassword', async (req, res) => {
 
       if (queryError) {
         console.error('Error executing SQL query:', queryError);
-        return res.status(500).json({ message: 'Internal Server Error' });
+        return res.status(500).json({ error: false,message: 'Internal Server Error' });
       }
 
       if (result.affectedRows === 0) {
