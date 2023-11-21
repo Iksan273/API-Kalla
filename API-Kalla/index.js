@@ -14,11 +14,10 @@ const moment = require('moment-timezone');
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Array untuk menyimpan data pengguna yang belum diverifikasi
-const unverifiedUsers = [];
 
+//------------------------------------------ AUTH REGISTER DAN LOGIN API-----------------------------------------//
 app.set('view engine', 'ejs');
-
+const unverifiedUsers = [];
 
 // Mengatur direktori tampilan (views)
 app.set('views', __dirname + '/views');
@@ -50,36 +49,148 @@ const verifyToken = (req, res, next) => {
   });
 };
 
-app.get('/', (req, res)=>{
-  res.send ("halohaloooo")
-})
+app.post('/register', (req, res) => {
+  const { firstName, lastName, email, username, password } = req.body;
+  if (!firstName || !lastName || !email || !username || !password) {
+    return res.status(400).json({ message: 'Semua data harus terisi' });
+  }
+  const verificationToken = createVerificationToken({ email });
+  console.log(verificationToken);
 
-app.get('/users', (req, res) => {
-  const sql = "SELECT * FROM user";
+  const mailOptions = {
+    from: 'kallatracking01@gmail.com',
+    to: email,
+    subject: 'Verifikasi Email',
+    text: `Klik tautan ini untuk verifikasi email Anda: https://mobile-kalla.vercel.app/verify/${verificationToken}`,
+  };
 
-  pool.getConnection((error, connection) => {
+  // Simpan pengguna yang belum diverifikasi dalam array
+  unverifiedUsers.push({ firstName, lastName, email, username, password });
+
+  transporter.sendMail(mailOptions, async (error, info) => {
     if (error) {
-      console.error('Error getting connection from pool:', error);
-      return res.status(500).json({ message: 'Internal Server Error' });
+      console.error(error);
+      res.status(500).json({ message: 'Gagal mengirim email verifikasi' });
+    } else {
+      console.log('Email verifikasi terkirim: ' + info.response);
+      const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
+      const salt = await bcrypt.genSalt(10);
+
+      // Enkripsi password
+      const hashedPassword = await bcrypt.hashSync(password, salt);
+
+      // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
+      pool.getConnection((connectionError, connection) => {
+        if (connectionError) {
+          console.error('Error getting connection from pool:', connectionError);
+          return res.status(500).json({ message: 'Internal Server Error' });
+        }
+
+        // Eksekusi query menggunakan koneksi dari pool
+        connection.query(sql, [firstName, lastName, email, username, hashedPassword], (queryError, result) => {
+          connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
+
+          if (queryError) {
+            console.error('Error executing SQL query:', queryError);
+            return res.status(500).json({ message: 'Internal Server Error' });
+          }
+          res.status(201).json({ error: false, message: 'Pendaftaran berhasil. Silakan verifikasi email Anda.' });
+        });
+      });
     }
-
-    connection.query(sql, (queryError, result) => {
-      connection.release(); 
-
-      if (queryError) {
-        console.error('Error executing SQL query:', queryError);
-        return res.status(500).json({ message: 'Internal Server Error' });
-      }
-      response(200, result, "Success Get Data", res);
-    });
   });
 });
+
+
+app.get('/verify/:token', verifyToken, (req, res) => {
+  const email = req.decoded.email;
+
+  // Cari pengguna yang belum diverifikasi berdasarkan email
+  const unverifiedUserIndex = unverifiedUsers.findIndex((user) => user.email === email);
+
+  if (unverifiedUserIndex !== -1) {
+    const user = unverifiedUsers[unverifiedUserIndex];
+    // Ubah status pengguna menjadi "verified" di basis data
+    const sql = "UPDATE user SET isVerified = '1' WHERE email = ?";
+
+    // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
+    pool.getConnection((connectionError, connection) => {
+      if (connectionError) {
+        console.error('Error getting connection from pool:', connectionError);
+        return res.status(500).json({ message: 'Internal Server Error' });
+      }
+
+      // Eksekusi query menggunakan koneksi dari pool
+      connection.query(sql, [user.email], (queryError, result) => {
+        connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
+
+        if (queryError) {
+          console.error('Error executing SQL query:', queryError);
+          return res.status(500).json({ message: 'Internal Server Error' });
+        }
+        unverifiedUsers.splice(unverifiedUserIndex, 1);
+        res.redirect('/success');
+      });
+    });
+  } else {
+    res.redirect('/failed');
+  }
+});
+
+app.post('/login', (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email dan password diperlukan' });
+  } else {
+    const sql = "SELECT * FROM user WHERE email = ?";
+    
+    // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
+    pool.getConnection((connectionError, connection) => {
+      if (connectionError) {
+        console.error('Error getting connection from pool:', connectionError);
+        return res.status(500).json({ message: 'Internal Server Error' });
+      }
+
+      // Eksekusi query menggunakan koneksi dari pool
+      connection.query(sql, [email], async (queryError, results) => {
+        connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
+
+        if (queryError) {
+          console.error('Error executing SQL query:', queryError);
+          return res.status(500).json({ message: 'Internal Server Error' });
+        }
+        
+        if (results.length === 0) {
+          return res.status(401).json({ message: 'Email atau kata sandi salah' });
+        }
+        const user = results[0];
+
+        if (user.isVerified === 0) {
+          return res.status(403).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
+        }
+
+        // Bandingkan password yang diberikan oleh pengguna dengan hashed password di database
+        const passwordMatch = await bcrypt.compareSync(password, user.password);
+
+        if (!passwordMatch) {
+          return res.status(401).json({ message: 'Email atau kata sandi salah' });
+        }
+
+        res.status(200).json({ message: 'Login berhasil', user });
+      });
+    });
+  }
+});
+
+
+//------------------------------------------ END AUTH REGISTER DAN LOGIN API-----------------------------------------//
+
+//------------------------------------------ FORGOT PASSWORD API-----------------------------------------//
 
 app.post('/forgotPassword', (req, res) => {
   const { email } = req.body;
   const expirationTimeInMinutes = 5;
-
-  // Check if the email exists in the user table
   pool.getConnection((err, connection) => {
     if (err) {
       console.error('Error getting connection from pool', err);
@@ -250,142 +361,9 @@ app.post('/updatePassword', async (req, res) => {
   });
 }); 
 
+//------------------------------------------ END FORGOT PASSWORD API-----------------------------------------//
 
-app.post('/register', (req, res) => {
-  const { firstName, lastName, email, username, password } = req.body;
-  if (!firstName || !lastName || !email || !username || !password) {
-    return res.status(400).json({ message: 'Semua data harus terisi' });
-  }
-  const verificationToken = createVerificationToken({ email });
-  console.log(verificationToken);
-
-  const mailOptions = {
-    from: 'kallatracking01@gmail.com',
-    to: email,
-    subject: 'Verifikasi Email',
-    text: `Klik tautan ini untuk verifikasi email Anda: https://mobile-kalla.vercel.app/verify/${verificationToken}`,
-  };
-
-  // Simpan pengguna yang belum diverifikasi dalam array
-  unverifiedUsers.push({ firstName, lastName, email, username, password });
-
-  transporter.sendMail(mailOptions, async (error, info) => {
-    if (error) {
-      console.error(error);
-      res.status(500).json({ message: 'Gagal mengirim email verifikasi' });
-    } else {
-      console.log('Email verifikasi terkirim: ' + info.response);
-      const sql = "INSERT INTO user (firstName, lastName, email, username, password) VALUES (?, ?, ?, ?, ?)";
-      const salt = await bcrypt.genSalt(10);
-
-      // Enkripsi password
-      const hashedPassword = await bcrypt.hashSync(password, salt);
-
-      // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
-      pool.getConnection((connectionError, connection) => {
-        if (connectionError) {
-          console.error('Error getting connection from pool:', connectionError);
-          return res.status(500).json({ message: 'Internal Server Error' });
-        }
-
-        // Eksekusi query menggunakan koneksi dari pool
-        connection.query(sql, [firstName, lastName, email, username, hashedPassword], (queryError, result) => {
-          connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
-
-          if (queryError) {
-            console.error('Error executing SQL query:', queryError);
-            return res.status(500).json({ message: 'Internal Server Error' });
-          }
-          res.status(201).json({ error: false, message: 'Pendaftaran berhasil. Silakan verifikasi email Anda.' });
-        });
-      });
-    }
-  });
-});
-
-
-app.get('/verify/:token', verifyToken, (req, res) => {
-  const email = req.decoded.email;
-
-  // Cari pengguna yang belum diverifikasi berdasarkan email
-  const unverifiedUserIndex = unverifiedUsers.findIndex((user) => user.email === email);
-
-  if (unverifiedUserIndex !== -1) {
-    const user = unverifiedUsers[unverifiedUserIndex];
-    // Ubah status pengguna menjadi "verified" di basis data
-    const sql = "UPDATE user SET isVerified = '1' WHERE email = ?";
-
-    // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
-    pool.getConnection((connectionError, connection) => {
-      if (connectionError) {
-        console.error('Error getting connection from pool:', connectionError);
-        return res.status(500).json({ message: 'Internal Server Error' });
-      }
-
-      // Eksekusi query menggunakan koneksi dari pool
-      connection.query(sql, [user.email], (queryError, result) => {
-        connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
-
-        if (queryError) {
-          console.error('Error executing SQL query:', queryError);
-          return res.status(500).json({ message: 'Internal Server Error' });
-        }
-        unverifiedUsers.splice(unverifiedUserIndex, 1);
-        res.redirect('/success');
-      });
-    });
-  } else {
-    res.redirect('/failed');
-  }
-});
-
-app.post('/login', (req, res) => {
-  const { email, password } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email dan password diperlukan' });
-  } else {
-    const sql = "SELECT * FROM user WHERE email = ?";
-    
-    // Gunakan pool.getConnection untuk mendapatkan koneksi dari pool
-    pool.getConnection((connectionError, connection) => {
-      if (connectionError) {
-        console.error('Error getting connection from pool:', connectionError);
-        return res.status(500).json({ message: 'Internal Server Error' });
-      }
-
-      // Eksekusi query menggunakan koneksi dari pool
-      connection.query(sql, [email], async (queryError, results) => {
-        connection.release(); // Lepaskan koneksi kembali ke pool setelah selesai
-
-        if (queryError) {
-          console.error('Error executing SQL query:', queryError);
-          return res.status(500).json({ message: 'Internal Server Error' });
-        }
-        
-        if (results.length === 0) {
-          return res.status(401).json({ message: 'Email atau kata sandi salah' });
-        }
-        const user = results[0];
-
-        if (user.isVerified === 0) {
-          return res.status(403).json({ message: 'Verifikasi email terlebih dahulu sebelum login' });
-        }
-
-        // Bandingkan password yang diberikan oleh pengguna dengan hashed password di database
-        const passwordMatch = await bcrypt.compareSync(password, user.password);
-
-        if (!passwordMatch) {
-          return res.status(401).json({ message: 'Email atau kata sandi salah' });
-        }
-
-        res.status(200).json({ message: 'Login berhasil', user });
-      });
-    });
-  }
-});
-
-                                                               
+//------------------------------------------ PROFILE API-----------------------------------------//
 app.put('/profile/:userId', async (req, res) => {
   const userId = req.params.userId; // Mendapatkan userId dari URL
   const { firstName, lastName, username, password } = req.body;
@@ -420,41 +398,6 @@ app.put('/profile/:userId', async (req, res) => {
     });
   });
 });
-
-app.post('/updatePassword', async (req, res) => {
-  const { email, password } = req.body;
-
-  // Validasi data
-  if ( !email || !password) {
-    return res.status(400).json({ message: 'Semua data harus terisi' });
-  }
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hashSync(password, salt);
-  const updateQuery = "UPDATE user SET password = ? WHERE email = ?";
-
-  pool.getConnection((connectionError, connection) => {
-    if (connectionError) {
-      console.error('Error getting connection from pool:', connectionError);
-      return res.status(500).json({ error: false,message: 'Internal Server Error' });
-    }
-
-    connection.query(updateQuery, [ hashedPassword, email], (queryError, result) => {
-      connection.release();
-
-      if (queryError) {
-        console.error('Error executing SQL query:', queryError);
-        return res.status(500).json({ error: false,message: 'Internal Server Error' });
-      }
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ error: true, message: 'Pengguna tidak ditemukan' });
-      }
-
-      res.status(200).json({ error: false, message: 'Password berhasil diperbarui' });
-    });
-  });
-}); 
-
 app.put('/profileImage/:userId', (req, res) => {
   const userId = req.params.userId; // Mendapatkan userId dari URL
   const { url } = req.body;
@@ -488,7 +431,9 @@ app.put('/profileImage/:userId', (req, res) => {
     });
   });
 });
+//------------------------------------------ END PROFILE API-----------------------------------------//
 
+//------------------------------------------ HISTORY API-----------------------------------------//
 app.get('/historyUser/:userId', (req, res) => {
   const userId = req.params.userId;
   const sql = "SELECT * FROM history WHERE user_id = ? AND status = 'received'";
@@ -556,6 +501,8 @@ app.post('/history', (req, res) => {
     });
   });
 });
+
+//------------------------------------------ END HISTORY API-----------------------------------------//
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
